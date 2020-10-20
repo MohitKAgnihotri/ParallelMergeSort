@@ -1,5 +1,4 @@
 //
-// Created by 310165137 on 19/10/2020.
 //
 #include <stdio.h>
 #include <pthread.h>
@@ -8,6 +7,7 @@
 #include <semaphore.h>
 #include "parallelmergesort.h"
 
+/* Global Variables */
 signed int *array_to_be_sorted = NULL;
 sem_t arrayReady;
 sem_t firstHalfReady;
@@ -16,8 +16,7 @@ sem_t mergeReady;
 pthread_t  th1, th2, th3, th4, th5;
 
 // merge function for merging two parts
-void
-merge(int low, int mid, int high)
+void merge(int low, int mid, int high)
 {
 
     // n1 is size of left part and n2 is size of right part
@@ -63,8 +62,7 @@ merge(int low, int mid, int high)
 }
 
 // merge sort function
-void
-merge_sort(int low, int high)
+void merge_sort(int low, int high)
 {
     if (pthread_self() == th2)
     {
@@ -107,8 +105,8 @@ void *createArray(void *args)
     }
     printf("\n");
     printf("****************************Thread1 & Thread2 are concurrently sorting the array********************************************** \n");
-    sem_post(&arrayReady); // For the first half
 
+    sem_post(&arrayReady); // For the first half
     sem_post(&arrayReady); // For the second half
     pthread_exit(0);
 }
@@ -116,7 +114,6 @@ void *createArray(void *args)
 
 void *sortSecondHalf(void* args)
 {
-
     sem_wait(&arrayReady);
 
     unsigned int arraysize = *(int*) args;
@@ -137,7 +134,6 @@ void *sortSecondHalf(void* args)
 
 void *sortFirstHalf(void* args)
 {
-
     sem_wait(&arrayReady);
 
     unsigned int arraysize = *(int*) args;
@@ -158,16 +154,12 @@ void *sortFirstHalf(void* args)
 
 void *mergeTwoHalves(void* args)
 {
-
     sem_wait(&firstHalfReady);
-
     sem_wait(&SecondHalfReady);
 
     unsigned int arraysize = *(int*) args;
-    int low = 0;
     int high = arraysize-1;
-    int mid = low + (high - low) / 2;
-    merge(0, (high - 1) / 2, high - 1);
+    merge(0, high / 2, high);
 
     sem_post(&mergeReady);
     pthread_exit(0);
@@ -175,7 +167,6 @@ void *mergeTwoHalves(void* args)
 
 void *printSortedArray(void* args)
 {
-
     sem_wait(&mergeReady);
     unsigned int arraysize = *(int*) args;
     printf("%s", "The element of array have been sorted as follows: \n");
@@ -196,17 +187,23 @@ int main(int argc, char *argv[])
 
     if (argc < 2)
     {
-        printf("Array Size is missing; Correct Usage: %s <Size>", argv[0]);
+        printf("Array Size is missing; Correct Usage: %s <Size>\n", argv[0]);
+        return 0;
     }
 
     array_size = atoi(argv[1]);
+    if (array_size <= 0)
+    {
+        printf("Array Size is missing; Correct Usage: %s <Size>\n", argv[0]);
+        return 0;
+    }
+
     srand(time(0));
 
     sem_init(&arrayReady, 0, 0);
     sem_init(&firstHalfReady, 0, 0);
     sem_init(&SecondHalfReady, 0, 0);
     sem_init(&mergeReady, 0, 0);
-
 
     int rc = pthread_create(&th1, NULL, createArray, (void *)&array_size);
     if (rc){
