@@ -4,9 +4,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
-#include <math.h>
 #include <time.h>
-#include <limits.h>
 #include <semaphore.h>
 #include "parallelmergesort.h"
 
@@ -15,45 +13,84 @@ sem_t arrayReady;
 sem_t firstHalfReady;
 sem_t SecondHalfReady;
 sem_t mergeReady;
+pthread_t  th1, th2, th3, th4, th5;
 
-void merge(int *A,int p,int q,int r)
+// merge function for merging two parts
+void
+merge(int low, int mid, int high)
 {
-    int n1=q-p+1,n2=r-q;
-    int L[n1+1],R[n2+1],i,j,k;
-    L[n1]=INT_MAX;
-    R[n2]=INT_MAX;
 
-    for (i=0;i<n1;i++)
-        L[i]=A[p+i];
+    // n1 is size of left part and n2 is size of right part
+    int n1 = mid - low + 1;
+    int n2 = high - mid;
 
-    for (j=0;j<n2;j++)
-        R[j]=A[q+j+1];
+    int *left = malloc(n1 * sizeof(int));
+    int *right = malloc(n2 * sizeof(int));
 
-    i=0;j=0;
+    int i;
+    int j;
 
-    for (k=p;k<=r;k++)
-    {
-        if(L[i]<=R[j])
-        {
-            A[k]=L[i];
-            i++;
-        }
+    // storing values in left part
+    for (i = 0; i < n1; i++)
+        left[i] = array_to_be_sorted[i + low];
+
+    // storing values in right part
+    for (i = 0; i < n2; i++)
+        right[i] = array_to_be_sorted[i + mid + 1];
+
+    int k = low;
+
+    i = j = 0;
+
+    // merge left and right in ascending order
+    while (i < n1 && j < n2) {
+        if (left[i] <= right[j])
+            array_to_be_sorted[k++] = left[i++];
         else
-        {
-            A[k]=R[j];
-            j++;
-        }
+            array_to_be_sorted[k++] = right[j++];
     }
+
+    // insert remaining values from left
+    while (i < n1)
+        array_to_be_sorted[k++] = left[i++];
+
+    // insert remaining values from right
+    while (j < n2)
+        array_to_be_sorted[k++] = right[j++];
+
+    free(left);
+    free(right);
 }
 
-void mergeSort(int *A,int p,int r)
+// merge sort function
+void
+merge_sort(int low, int high)
 {
-    if (p<r)
+    if (pthread_self() == th2)
     {
-        int q=(p+r)/2;
-        mergeSort(A,p,q);
-        mergeSort(A,q+1,r);
-        merge(A,p,q,r);
+        printf ("*%d\t",+array_to_be_sorted[0]);
+    }
+    else if (pthread_self() == th3)
+    {
+        printf ("**%d\t",+array_to_be_sorted[0]);
+    }
+    else
+    {
+        // empty
+    }
+
+    // calculating mid point of array
+    int mid = low + (high - low) / 2;
+
+    if (low < high) {
+        // calling first half
+        merge_sort(low, mid);
+
+        // calling second half
+        merge_sort(mid + 1, high);
+
+        // merging the two halves
+        merge(low, mid, high);
     }
 }
 
@@ -69,53 +106,92 @@ void *createArray(void *args)
         printf("%d \t ", array_to_be_sorted[i]);
     }
     printf("\n");
+    printf("****************************Thread1 & Thread2 are concurrently sorting the array********************************************** \n");
     sem_post(&arrayReady); // For the first half
+
     sem_post(&arrayReady); // For the second half
+    pthread_exit(0);
 }
 
 
 void *sortSecondHalf(void* args)
 {
+
     sem_wait(&arrayReady);
+
     unsigned int arraysize = *(int*) args;
-    mergeSort(array_to_be_sorted,0,arraysize/2); // Pass starting from 0 to Length - 1 of Array
-    sem_post(&firstHalfReady);
+    int low = (arraysize-1)/2+1;
+    int high = arraysize-1;
+    // evaluating mid point
+    int mid = low + (high - low) / 2;
+
+    if (low < high) {
+        merge_sort(low, mid);
+        merge_sort(mid + 1, high);
+        merge(low, mid, high);
+    }
+    printf("\n");
+    sem_post(&SecondHalfReady);
+    pthread_exit(0);
 }
 
 void *sortFirstHalf(void* args)
 {
+
     sem_wait(&arrayReady);
+
     unsigned int arraysize = *(int*) args;
-    mergeSort(array_to_be_sorted,arraysize/2+1,arraysize-1); // Pass starting from 0 to Length - 1 of Array
-    sem_post(&SecondHalfReady);
+    int low = 0;
+    int high = (arraysize-1)/2;
+    // evaluating mid point
+    int mid = low + (high - low) / 2;
+
+    if (low < high) {
+        merge_sort(low, mid);
+        merge_sort(mid + 1, high);
+        merge(low, mid, high);
+    }
+    printf("\n");
+    sem_post(&firstHalfReady);
+    pthread_exit(0);
 }
 
 void *mergeTwoHalves(void* args)
 {
+
     sem_wait(&firstHalfReady);
+
     sem_wait(&SecondHalfReady);
 
-    printf("Merging halves");
-    sem_post(&mergeReady);
+    unsigned int arraysize = *(int*) args;
+    int low = 0;
+    int high = arraysize-1;
+    int mid = low + (high - low) / 2;
+    merge(0, (high - 1) / 2, high - 1);
 
+    sem_post(&mergeReady);
+    pthread_exit(0);
 }
 
 void *printSortedArray(void* args)
 {
-    sem_post(&mergeReady);
+
+    sem_wait(&mergeReady);
     unsigned int arraysize = *(int*) args;
     printf("%s", "The element of array have been sorted as follows: \n");
+
     for (signed int i = 0; i < arraysize; i++)
     {
         printf("%d \t ", array_to_be_sorted[i]);
     }
     printf("\n");
+    pthread_exit(0);
 }
 
 int main(int argc, char *argv[])
 {
-    pthread_t  th1, th2, th3, th4, th5;
-    void *status;
+
+    int *status = NULL;
     int array_size;
 
     if (argc < 2)
@@ -144,27 +220,28 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    rc = pthread_create(&th2, NULL, sortSecondHalf, (void *)&array_size);
+    rc = pthread_create(&th3, NULL, sortSecondHalf, (void *)&array_size);
     if (rc){
         printf("ERROR; return code from pthread_create() is %d\n", rc);
         exit(-1);
     }
 
-    rc = pthread_create(&th2, NULL, mergeTwoHalves, (void *)&array_size);
+    rc = pthread_create(&th4, NULL, mergeTwoHalves, (void *)&array_size);
     if (rc){
         printf("ERROR; return code from pthread_create() is %d\n", rc);
         exit(-1);
     }
 
-    rc = pthread_create(&th2, NULL, printSortedArray, (void *)&array_size);
+    rc = pthread_create(&th5, NULL, printSortedArray, (void *)&array_size);
     if (rc){
         printf("ERROR; return code from pthread_create() is %d\n", rc);
         exit(-1);
     }
 
-    pthread_join(th1, &status);
-    pthread_join(th2, &status);
-    pthread_join(th3, &status);
-    pthread_join(th4, &status);
-    pthread_join(th5, &status);
+    pthread_join(th1, (void **) &status);
+    pthread_join(th2, (void **) &status);
+    pthread_join(th3, (void **) &status);
+    pthread_join(th4, (void **) &status);
+    pthread_join(th5, (void **) &status);
+    return 0;
 }
