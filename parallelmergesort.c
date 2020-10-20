@@ -68,11 +68,11 @@ merge_sort(int low, int high)
 {
     if (pthread_self() == th2)
     {
-        printf ("*%d\t",+array_to_be_sorted[0]);
+        printf ("*%d\t",+array_to_be_sorted[low]);
     }
     else if (pthread_self() == th3)
     {
-        printf ("**%d\t",+array_to_be_sorted[0]);
+        printf ("**%d\t",+array_to_be_sorted[low]);
     }
     else
     {
